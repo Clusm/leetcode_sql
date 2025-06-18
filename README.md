@@ -15,21 +15,7 @@
 
 ---
 
-## 🗂️ 文件结构说明
 
-```
-leetcode-sql/
-├── day01/
-│   ├── 175_Combine_Two_Tables.sql
-│   ├── 183_Customers_Who_Never_Order.sql
-│   └── README.md
-├── day02/
-│   ├── 197_Rising_Temperature.sql
-│   ├── 262_Trips_and_Users.sql
-│   └── README.md
-├── ...
-└── README.md               # 项目说明
-```
 
 每道题包含：
 
