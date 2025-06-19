@@ -1,0 +1,132 @@
+
+# SQL 知识点详尽整理
+
+---
+
+## 🧩 一、表连接（JOIN）
+
+> **概念**：将两张（或多张）表按条件拼接，返回符合条件的行。
+
+| 连接类型       | 定义                                                         | 使用场景                                                  | 示例代码                                                                                     | 提示                                                         |
+|---------------|--------------------------------------------------------------|----------------------------------------------------------|----------------------------------------------------------------------------------------------|--------------------------------------------------------------|
+| **INNER JOIN** | 只保留两表中匹配的行                                         | 只需交集数据                                              | ``` SELECT * FROM A INNER JOIN B ON A.id = B.id;```                                 | 未匹配行丢失；请确保匹配字段上有索引。                         |
+| **LEFT JOIN**  | 保留左表所有行，右表无匹配补 NULL                            | 主表为左表；查缺失关联                                    | ``` SELECT A.*, B.col FROM A LEFT JOIN B ON A.id = B.id;```                        | 常配合 `WHERE B.id IS NULL` 查无关联；注意大量 NULL 传输开销。 |
+| **RIGHT JOIN** | 保留右表所有行，左表无匹配补 NULL（较少用）                  | 主表为右表；也可用 `LEFT JOIN` 代替                      | ``` SELECT B.*, A.col FROM A RIGHT JOIN B ON A.id = B.id;```                       | 建议统一使用 `LEFT JOIN`；保持风格一致。                      |
+| **FULL JOIN**  | 保留两表所有行，不匹配补 NULL（部分 DBMS 支持）             | 需并集数据                                              | ``` SELECT * FROM A FULL JOIN B ON A.id=B.id;```                                         | MySQL 不原生支持，可用 `UNION`+两次 `LEFT JOIN` 实现。         |
+| **SELF JOIN**  | 表自身与自身连接，用别名区分两份实例                        | 同表不同角色（如员工-经理）、同表行间对比                  | ``` SELECT e.name AS emp, m.name AS mgr FROM Emp e JOIN Emp m ON e.mgrId=m.id;```   | 别名要清晰；防止产生笛卡尔积。                                |
+
+---
+
+## 🔍 二、子查询（Subquery）
+
+> **概念**：在一个查询内部嵌套另一个查询，用于计算条件、构造临时表或集合。
+
+| 类型                 | 定义                                          | 使用场景                                    | 示例代码                                                                                      | 提示                                                         |
+|----------------------|-----------------------------------------------|---------------------------------------------|-----------------------------------------------------------------------------------------------|--------------------------------------------------------------|
+| **标量子查询**       | 返回单行单列，用于 `WHERE` 或字段              | 求最大/最小/平均值后过滤主表                 | ``` SELECT * FROM Emp WHERE salary > (SELECT MAX(salary) FROM Emp);```             | 子查询须唯一，否则报错；常配聚合或 `LIMIT 1`。                |
+| **表子查询（派生表）** | 返回多行多列，作为临时表在 `FROM` 或 `JOIN` 用 | 构造临时视图、拆分复杂逻辑                   | ``` SELECT t.dept, COUNT(*) FROM (SELECT dept FROM Emp WHERE ...) AS t GROUP BY t.dept;``` | 必须指定别名；临时表过大影响性能。                           |
+| **IN / NOT IN**      | 判断某列值是否在子查询集合中                   | 包含/排除列表判断                           | ``` SELECT * FROM Cust WHERE id NOT IN (SELECT custId FROM Orders);```            | 若子查询含 NULL，`NOT IN` 可能失效；可改用 `NOT EXISTS`。    |
+| **EXISTS / NOT EXISTS** | 判断子查询是否至少返回一行                   | 反向查询；大数据下性能优于 `IN`              | ``` SELECT * FROM Cust c WHERE EXISTS(SELECT 1 FROM Orders o WHERE o.custId=c.id);``` | `EXISTS` 利用索引判断存在性；推荐用于反向排除。                |
+
+---
+
+## 📊 三、分组与聚合（GROUP BY / HAVING）
+
+> **概念**：将多行数据根据字段分组后，对每组执行聚合计算。
+
+| 功能               | 定义                                                         | 示例代码                                                                                     | 易错点 & 建议                                             |
+|--------------------|--------------------------------------------------------------|----------------------------------------------------------------------------------------------|-----------------------------------------------------------|
+| **GROUP BY**       | 指定分组字段，其他字段须聚合或出现在 `GROUP BY` 中           | ``` SELECT dept, COUNT(*) FROM Emp GROUP BY dept;```                             | `SELECT` 字段需一致；分组字段过多影响性能。                 |
+| **HAVING**         | 对分组后结果再筛选                                           | ``` ... GROUP BY dept HAVING COUNT(*) > 5;```                                       | 不能替代 `WHERE`；执行顺序在 `GROUP BY` 之后。             |
+| **COUNT(\*)**      | 统计组内记录总数                                             | `COUNT(*)`                                                                                   | 包含 NULL；速度快。                                        |
+| **COUNT(DISTINCT)** | 去重计数                                                   | `COUNT(DISTINCT user_id)`                                                                    | 性能稍差；大数据可考虑 Approximate 方法（如 HyperLogLog）。 |
+| **SUM / AVG**      | 求和 / 求平均                                               | `SUM(price)`, `AVG(score)`                                                                   | 忽略 NULL；可配 `ROUND()` 保留精度。                      |
+| **MAX / MIN**      | 求极值                                                      | `MAX(salary)`, `MIN(hire_date)`                                                              | 支持索引加速；忽略 NULL。                                  |
+
+---
+
+## ⏱ 四、排序与限制（ORDER BY / LIMIT / OFFSET）
+
+> **概念**：控制结果集的排序和行数返回。
+
+| 功能                   | 定义                                                         | 示例代码                                                      | 注意事项                                            |
+|------------------------|--------------------------------------------------------------|---------------------------------------------------------------|-----------------------------------------------------|
+| **ORDER BY**           | 指定字段排序，默认升序，加 `DESC` 为降序                     | `SELECT * FROM Emp ORDER BY hire_date DESC;`                  | 未指定则升序；可多字段排序。                        |
+| **LIMIT n**            | 返回前 n 行                                                 | `... LIMIT 10;`                                               | MySQL/SQLite 支持；SQL Server 用 `TOP`。           |
+| **OFFSET n**           | 跳过前 n 行，再返回 `LIMIT` 行                               | `... LIMIT 10 OFFSET 20;`                                     | 性能差；大数据翻页用 Keyset Pagination 更优。       |
+| **FETCH FIRST / NEXT** | SQL 标准：返回前 n 行                                       | `FETCH FIRST 5 ROWS ONLY;`                                    | 兼容性需留意。                                      |
+
+---
+
+## 🪟 五、窗口函数（Window Functions）
+
+> **概念**：在结果集中对每行保留原行，然后基于“窗口”计算排名、前后值等。
+
+| 函数               | 定义 & 场景                                                    | 示例代码                                                                                       | 提示 & 建议                                          |
+|--------------------|----------------------------------------------------------------|------------------------------------------------------------------------------------------------|------------------------------------------------------|
+| **ROW_NUMBER()**   | 按排序为每行生成唯一序号                                       | `ROW_NUMBER() OVER(PARTITION BY dept ORDER BY salary DESC)`                                     | 无并列号；Top N 场景配子查询。                        |
+| **RANK()**         | 并列排名，排名后跳号                                           | `RANK() OVER(ORDER BY score DESC)`                                                             | 并列后下一个排名跳过并列数。                          |
+| **DENSE_RANK()**   | 并列排名，不跳号                                               | `DENSE_RANK() OVER(PARTITION BY dept ORDER BY salary DESC)`                                     | 并列后紧跟；Top N 并列场景首选。                      |
+| **LAG() / LEAD()** | 向前/向后取第 n 行值，用于行间比较                             | `LAG(temp,1) OVER(ORDER BY date)`                                                               | 返回 NULL 时可用 `COALESCE()` 默认替代。              |
+| **FIRST_VALUE()**  | 返回窗口中第一条值                                            | `FIRST_VALUE(event_date) OVER(PARTITION BY user ORDER BY event_date)`                           | 保留原行，用于首次/最早值获取。                      |
+| **PARTITION BY**   | 定义窗口分区                                                  | 同上                                                                                            | 类似 `GROUP BY` 但不压缩行；保留上下文。              |
+
+---
+
+## 🔁 六、更新与删除（UPDATE / DELETE）
+
+> **概念**：批量修改或删除表中数据，可结合子查询、连接或条件表达式。
+
+| 操作                  | 场景                                                         | 示例代码                                                                                     | 提示 & 建议                                      |
+|-----------------------|--------------------------------------------------------------|----------------------------------------------------------------------------------------------|--------------------------------------------------|
+| **UPDATE + CASE**     | 条件更新，不同条件赋不同值                                   | ``` UPDATE Salary SET sex = CASE sex WHEN 'm' THEN 'f' ELSE 'm' END;```            | 一条语句多条件；其他 DBMS 用 `IIF()`/`DECODE()`。 |
+| **DELETE ... JOIN**   | MySQL 特有：删除与其他表或自身连接后符合条件的行            | ``` DELETE p1 FROM Person p1 JOIN Person p2 ON p1.email=p2.email AND p1.id>p2.id;``` | 其他 DBMS 需子查询。                              |
+| **DELETE WHERE NOT IN** | 删除满足子查询条件的行                                     | ``` DELETE FROM Person WHERE id NOT IN(SELECT MIN(id) FROM Person GROUP BY email);``` | `NOT IN` 对 NULL 敏感；推荐 `NOT EXISTS`。        |
+
+---
+
+## 🧮 七、日期与数学函数
+
+> **概念**：对日期、数值做特殊计算或格式化。
+
+| 函数 / 表达式               | 含义 & 示例                                                       | 提示                                                         |
+|-----------------------------|-------------------------------------------------------------------|--------------------------------------------------------------|
+| **DATEDIFF(d1, d2)**        | 计算两个日期间相差天数                                           | `DATEDIFF(day,'2025-06-19','2025-06-20') = 1`                 |
+| **ROUND(x, n)**             | 四舍五入保留 n 位小数                                            | `ROUND(SUM(price),2)`                                        |
+| **MOD(col, m)** 或 `col % m`| 取模（判断奇偶、分组）                                           | `id % 2 = 1`                                                 |
+| **COALESCE(a, b, …)**       | 返回第一个非 NULL 值                                             | `COALESCE(LEAD(val),val)`                                    |
+| **DATE_ADD** / **DATEADD**  | 日期加减（MySQL `DATE_ADD` / SQL Server `DATEADD`）               | `DATE_ADD(recordDate, INTERVAL 1 DAY)`                       |
+
+---
+
+## 📋 八、其他技巧 & 高频考点
+
+> **概念**：常见但易忽略的小技巧，有助于快速应对面试题。
+
+| 技巧                            | 用途                                              | 示例                                                         |
+|---------------------------------|---------------------------------------------------|--------------------------------------------------------------|
+| **DISTINCT**                    | 去重                                              | `SELECT DISTINCT email;`                                     |
+| **(col1, col2) IN (…)**         | 多列复合匹配                                      | `(dept, salary) IN (SELECT dept, MAX(salary) FROM Emp GROUP BY dept);` |
+| **CTE（WITH）**                 | 分步构造临时结果，提高可读性                      | ``` WITH t AS(...)\nSELECT ... FROM t;```             |
+| **键集分页（Keyset Pagination）** | 大表翻页时用索引字段代替 LIMIT+OFFSET，性能更优     | `WHERE id > 上次最大ID LIMIT N;`                             |
+
+---
+
+## 🧠 九、常见题型 & 解题模板
+
+> **概念**：按题型快速定位解题思路。
+
+| 题型               | 核心思路                                  | 示例模板                                                       |
+|--------------------|-------------------------------------------|----------------------------------------------------------------|
+| **缺失关联**       | `LEFT JOIN … WHERE … IS NULL` / `NOT EXISTS` | `SELECT * FROM A LEFT JOIN B ON… WHERE B.id IS NULL;`         |
+| **重复值查找**     | `GROUP BY … HAVING COUNT(*)>1` / `EXISTS`   | `SELECT val FROM T GROUP BY val HAVING COUNT(*)>1;`           |
+| **连续数据**       | `LAG()/LEAD()` / `id-ROW_NUMBER()` 差分分组 | `LAG(x) OVER(ORDER BY id)` 或 `id-ROW_NUMBER() OVER(...)`      |
+| **第 N 高 / 排名** | `LIMIT … OFFSET …` / `RANK()/DENSE_RANK()`   | `SELECT * FROM T ORDER BY x DESC LIMIT 1 OFFSET N-1;`         |
+| **首次/次日行为**  | `MIN(date)` / `FIRST_VALUE()` + `DATEDIFF() = 1` | `MIN(event_date)` 或 `DATEDIFF(a.date,b.min_date)=1`          |
+| **Top N 并列**     | `DENSE_RANK() <= N` / 子查询计数           | `DENSE_RANK() OVER(PARTITION BY dept ORDER BY sal DESC)<=3`   |
+| **删除重复行**     | `DELETE JOIN` / `DELETE WHERE NOT IN…`     | `DELETE p1 FROM P p1 JOIN P p2 ON… AND p1.id>p2.id;`          |
+| **条件更新**       | `UPDATE … SET col=CASE…END`                | `UPDATE T SET col=CASE WHEN… END;`                           |
+
+> **Tip**：遇到性能瓶颈，**先确认数据量级和索引**，再考虑分批、分区或物化视图等高级优化。
+
+
